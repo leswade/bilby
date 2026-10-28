@@ -904,8 +904,11 @@ class TestEquationOfStateConversions(unittest.TestCase):
         ]
         self.lambda_1_spectral = [0., 0., 0., 0., 1275.7253186286332]
         self.lambda_2_spectral = [0., 0., 0., 0., 4504.897675043909]
-        self.lambda_1_polytrope = [0., 0., 0., 0., 0., 234.66424898184766]
-        self.lambda_2_polytrope = [0., 0., 0., 0., 0., 3710.931378294547]
+        # Reference values from the multi-branch TOV solver (lalsuite new-tov-solver), reproducible to
+        # about 1e-5 (100-node pressure grid, ODE tolerance 1e-6). The previous single-branch solver gave
+        # 234.66424898184766 and 3710.931378294547, a 2e-5 relative shift.
+        self.lambda_1_polytrope = [0., 0., 0., 0., 0., 234.6631360255473]
+        self.lambda_2_polytrope = [0., 0., 0., 0., 0., 3710.8465802518763]
         self.eos_check_spectral = [0, 0, 0, 0, 1]
         self.eos_check_polytrope = [0, 0, 0, 0, 0, 1]
 
@@ -959,7 +962,7 @@ class TestEquationOfStateConversions(unittest.TestCase):
         '''
         The points cover 6 test cases:
             - Fail log10_pressure1 >= log10_pressure2
-            - Fail SimNeutronStarEOS3PDViableFamilyCheck()
+            - Fail the family build or the min/max mass check (formerly SimNeutronStarEOS3PDViableFamilyCheck())
             - Fail max_speed_of_sound_ <= 1.1
             - Fail mass_1_source <= max_mass
             - Fail mass_2_source >= min_mass
