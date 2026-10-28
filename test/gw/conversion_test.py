@@ -981,6 +981,93 @@ class TestEquationOfStateConversions(unittest.TestCase):
             self.assertAlmostEqual(self.lambda_2_polytrope[i], lambda_2, places=1)
             self.assertAlmostEqual(self.eos_check_polytrope[i], eos_check)
 
+    # Central-pressure sampling path (ns_central_pressure_scale / ns_central_pressure_ratio).
+    # The reference polytrope is gamma = (2.8, 2.5, 2.0) with joining pressures 10^34.08 and 10^34.8 dyn/cm^2.
+    central_pressure_polytrope = (2.8, 34.08, 2.5, 34.8, 2.0)
+
+    def test_central_pressure_reparameterization_conversion(self):
+        '''
+        Pressure 1 is the larger central pressure (mass_1 >= mass_2 on one branch), and the floor of the
+        reparameterization is the lowest central pressure of a lalsuite TOV sequence, so that
+        ns_central_pressure_scale = 0 is the lightest star the family contains.
+        '''
+        import lalsimulation
+        log10_p1, log10_p2 = conversion.central_pressure_reparameterization_conversion(0.6, 2.0)
+        self.assertAlmostEqual(log10_p1, conversion.MINIMUM_CENTRAL_LOG10_PRESSURE_SI + 2.0)
+        self.assertAlmostEqual(log10_p2, conversion.MINIMUM_CENTRAL_LOG10_PRESSURE_SI + 1.2)
+        self.assertGreaterEqual(log10_p1, log10_p2)
+        eos = lalsimulation.SimNeutronStarEOS3PieceDynamicPolytrope(2.8, 33.08, 2.5, 33.8, 2.0)
+        family = lalsimulation.CreateSimNeutronStarFamily(eos, 2)
+        family_floor = np.log10(lalsimulation.SimNeutronStarFamMinCentralPressure(family))
+        self.assertGreaterEqual(conversion.MINIMUM_CENTRAL_LOG10_PRESSURE_SI, family_floor)
+        self.assertLess(conversion.MINIMUM_CENTRAL_LOG10_PRESSURE_SI - family_floor, 1e-3)
+
+    def test_polytrope_central_pressures_round_trip(self):
+        '''
+        The masses and tidal deformabilities from a pair of central pressures agree with the
+        tidal deformabilities the mass-sampled path returns for those masses.
+        '''
+        g0, lp1, g1, lp2, g2 = self.central_pressure_polytrope
+        for scale, ratio in [(1.72, 0.98), (1.0, 0.9)]:
+            log10_pc1, log10_pc2 = conversion.central_pressure_reparameterization_conversion(ratio, scale)
+            mass_1, mass_2, lambda_1, lambda_2, eos_check = \
+                conversion.polytrope_central_pressures_to_masses_and_lambdas(g0, lp1, g1, lp2, g2, log10_pc1, log10_pc2)
+            self.assertTrue(eos_check)
+            self.assertGreaterEqual(mass_1, mass_2)
+            lambda_1_mass, lambda_2_mass, eos_check_mass = \
+                conversion.polytrope_or_causal_params_to_lambda_1_lambda_2(g0, lp1, g1, lp2, g2, mass_1, mass_2, 0)
+            self.assertTrue(eos_check_mass)
+            self.assertAlmostEqual(lambda_1 / lambda_1_mass, 1.0, delta=1e-3)
+            self.assertAlmostEqual(lambda_2 / lambda_2_mass, 1.0, delta=1e-3)
+
+    def test_polytrope_central_pressures_rejection(self):
+        '''
+        A central pressure above the maximum-mass star of every stable branch, or an acausal EOS,
+        gives eos_check = False with NaN masses; the lightest star (scale = 0) is accepted.
+        '''
+        g0, lp1, g1, lp2, g2 = self.central_pressure_polytrope
+        log10_pc1, log10_pc2 = conversion.central_pressure_reparameterization_conversion(0.9, 2.5)
+        mass_1, mass_2, lambda_1, lambda_2, eos_check = \
+            conversion.polytrope_central_pressures_to_masses_and_lambdas(g0, lp1, g1, lp2, g2, log10_pc1, log10_pc2)
+        self.assertFalse(eos_check)
+        self.assertTrue(np.isnan(mass_1) and np.isnan(mass_2))
+        self.assertEqual((lambda_1, lambda_2), (0.0, 0.0))
+        log10_pc1, log10_pc2 = conversion.central_pressure_reparameterization_conversion(0.9, 1.5)
+        _, _, _, _, eos_check = \
+            conversion.polytrope_central_pressures_to_masses_and_lambdas(6.0, lp1, 6.0, lp2, 6.0, log10_pc1, log10_pc2)
+        self.assertFalse(eos_check)
+        log10_pc1, log10_pc2 = conversion.central_pressure_reparameterization_conversion(1.0, 0.0)
+        mass_1, mass_2, _, _, eos_check = \
+            conversion.polytrope_central_pressures_to_masses_and_lambdas(g0, lp1, g1, lp2, g2, log10_pc1, log10_pc2)
+        self.assertTrue(eos_check)
+        self.assertLess(mass_1, 0.5)
+
+    def test_convert_to_lal_binary_neutron_star_parameters_central_pressures(self):
+        '''
+        The full conversion with central pressures sampled: scalar input returns masses, tidal
+        deformabilities and eos_check; array input handles accepted and rejected samples together.
+        '''
+        base = dict(luminosity_distance=40.0, a_1=0.0, a_2=0.0, tilt_1=0.0, tilt_2=0.0, phi_12=0.0, phi_jl=0.0,
+                    theta_jn=0.4, phase=0.0, ra=1.0, dec=0.3, geocent_time=0.0, psi=0.0,
+                    eos_polytrope_gamma_0=2.8, eos_polytrope_gamma_1=2.5, eos_polytrope_gamma_2=2.0,
+                    eos_polytrope_scaled_pressure_ratio=0.6, eos_polytrope_scaled_pressure_2=1.8)
+        out, added_keys = conversion.convert_to_lal_binary_neutron_star_parameters(
+            dict(base, ns_central_pressure_scale=1.72, ns_central_pressure_ratio=0.98))
+        for key in ['mass_1', 'mass_2', 'mass_1_source', 'mass_2_source', 'lambda_1', 'lambda_2', 'redshift']:
+            self.assertIn(key, added_keys)
+        self.assertTrue(out['eos_check'])
+        self.assertGreaterEqual(out['mass_1'], out['mass_2'])
+        self.assertAlmostEqual(out['mass_1'] / out['mass_1_source'], 1 + out['redshift'])
+        n = 3
+        arrays = {key: np.full(n, value) for key, value in base.items()}
+        arrays['ns_central_pressure_scale'] = np.array([1.72, 2.5, 1.0])
+        arrays['ns_central_pressure_ratio'] = np.array([0.98, 0.9, 0.9])
+        out, _ = conversion.convert_to_lal_binary_neutron_star_parameters(arrays)
+        self.assertEqual(list(out['eos_check']), [True, False, True])
+        self.assertTrue(np.isnan(out['mass_1'][1]))
+        self.assertEqual(out['lambda_1'][1], 0.0)
+        self.assertTrue(np.all(out['mass_1'][[0, 2]] >= out['mass_2'][[0, 2]]))
+
 
 if __name__ == "__main__":
     unittest.main()

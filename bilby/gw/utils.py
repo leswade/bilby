@@ -849,7 +849,7 @@ def lalsim_SimNeutronStarEOS3PieceCausalAnalytic(v1, log10p1_si, v2, log10p2_si,
 
 def lalsim_SimNeutronStarEOS3PDViableFamilyCheck(p0, log10p1_si, p1, log10p2_si, p2, causal):
     from lalsimulation import SimNeutronStarEOS3PDViableFamilyCheck
-    try: 
+    try:
         p0 = float(p0)
         p1 = float(p1)
         p2 = float(p2)
@@ -864,10 +864,83 @@ def lalsim_SimNeutronStarEOS3PDViableFamilyCheck(p0, log10p1_si, p1, log10p2_si,
     return SimNeutronStarEOS3PDViableFamilyCheck(p0, log10p1_si, p1, log10p2_si, p2, causal)
 
 
-def lalsim_CreateSimNeutronStarFamily(eos, min_fam):
+def lalsim_CreateSimNeutronStarFamily(eos, fam_flag=1):
+    """
+    Build the neutron star family (TOV sequence, all stable branches) of an EOS.
+
+    fam_flag selects what the new TOV solver computes and which interpolators it builds:
+    0: mass-indexed, including baryonic mass and the k3, k4 Love numbers (extended integrator)
+    1: mass-indexed, mass, radius and k2 only (default; the mass-sampled EOS paths)
+    2: pressure-indexed, mass, radius and k2 only (the central-pressure sampling path)
+    3: both mass- and pressure-indexed, extended integrator
+    Raises RuntimeError if the EOS has no stable branch.
+    """
     from lalsimulation import CreateSimNeutronStarFamily
 
-    return CreateSimNeutronStarFamily(eos, min_fam)
+    return CreateSimNeutronStarFamily(eos, fam_flag)
+
+
+def lalsim_SimNeutronStarFamMinCentralPressure(fam):
+    from lalsimulation import SimNeutronStarFamMinCentralPressure
+
+    return SimNeutronStarFamMinCentralPressure(fam)
+
+
+def lalsim_SimNeutronStarFamMaxCentralPressure(fam):
+    from lalsimulation import SimNeutronStarFamMaxCentralPressure
+
+    return SimNeutronStarFamMaxCentralPressure(fam)
+
+
+def lalsim_SimNeutronStarFamMassOfCentralPressure(pressure_in_SI, fam):
+    from lalsimulation import SimNeutronStarFamMassOfCentralPressure
+    try:
+        pressure_in_SI = float(pressure_in_SI)
+    except ValueError:
+        raise ValueError("Unable to convert pressure_in_SI to float.")
+    except TypeError:
+        raise TypeError("Unable to convert pressure_in_SI to float.")
+
+    return SimNeutronStarFamMassOfCentralPressure(pressure_in_SI, fam)
+
+
+def lalsim_SimNeutronStarFamRadiusOfCentralPressure(pressure_in_SI, fam):
+    from lalsimulation import SimNeutronStarFamRadiusOfCentralPressure
+    try:
+        pressure_in_SI = float(pressure_in_SI)
+    except ValueError:
+        raise ValueError("Unable to convert pressure_in_SI to float.")
+    except TypeError:
+        raise TypeError("Unable to convert pressure_in_SI to float.")
+
+    return SimNeutronStarFamRadiusOfCentralPressure(pressure_in_SI, fam)
+
+
+def lalsim_SimNeutronStarFamLoveNumberK2OfCentralPressure(pressure_in_SI, fam):
+    from lalsimulation import SimNeutronStarFamLoveNumberK2OfCentralPressure
+    try:
+        pressure_in_SI = float(pressure_in_SI)
+    except ValueError:
+        raise ValueError("Unable to convert pressure_in_SI to float.")
+    except TypeError:
+        raise TypeError("Unable to convert pressure_in_SI to float.")
+
+    return SimNeutronStarFamLoveNumberK2OfCentralPressure(pressure_in_SI, fam)
+
+
+def lalsim_SimNeutronStarFamNumberOfBranches(fam):
+    from lalsimulation import SimNeutronStarFamNumberOfBranches
+    return SimNeutronStarFamNumberOfBranches(fam)
+
+
+def lalsim_SimNeutronStarFamMinCentralPressurePerBranch(fam, branch_id):
+    from lalsimulation import SimNeutronStarFamMinCentralPressurePerBranch
+    return SimNeutronStarFamMinCentralPressurePerBranch(fam, branch_id)
+
+
+def lalsim_SimNeutronStarFamMaxCentralPressurePerBranch(fam, branch_id):
+    from lalsimulation import SimNeutronStarFamMaxCentralPressurePerBranch
+    return SimNeutronStarFamMaxCentralPressurePerBranch(fam, branch_id)
 
 
 def lalsim_SimNeutronStarEOSMaxPseudoEnthalpy(eos):
@@ -885,39 +958,33 @@ def lalsim_SimNeutronStarEOSSpeedOfSoundGeometerized(max_pseudo_enthalpy, eos):
     except TypeError:
         raise TypeError("Unable to convert max_pseudo_enthalpy to float.")
 
-    try: 
-        return SimNeutronStarEOSSpeedOfSoundGeometerized(max_pseudo_enthalpy, eos)
-    except: 
-        print(f"The issue happened when max_pseudo_enthalpy is {max_pseudo_enthalpy} and eox is {eos}.")
-        raise("Something, probably the XLAL error from interp.c:150, has occured.")
+    return SimNeutronStarEOSSpeedOfSoundGeometerized(max_pseudo_enthalpy, eos)
 
 
-def lalsim_SimNeutronStarFamMinMass(fam):
-    from lalsimulation import SimNeutronStarFamMinMass
-
-    return SimNeutronStarFamMinMass(fam)
-
-
-def lalsim_SimNeutronStarFamMaxMass(fam):
-    from lalsimulation import SimNeutronStarFamMaxMass
-
-    return SimNeutronStarFamMaxMass(fam)
+# The four mass-indexed wrappers below address the first stable branch of the family (branch 0). The new TOV
+# solver resolves every stable branch, but the mass-sampled EOS paths map a mass to one star, and using the
+# first branch reproduces the behaviour of the previous single-branch solver (and the existing unit tests).
+# Stars on later branches (twin stars) are reachable only through the central-pressure sampling path.
+FIRST_BRANCH = 0
 
 
-def lalsim_SimNeutronStarFamMinCentralPressure(fam):
-    from lalsimulation import SimNeutronStarFamMinCentralPressure
+def lalsim_SimNeutronStarFamMinimumMass(fam):
+    """Minimum mass (kg) of the first stable branch of the family."""
+    from lalsimulation import SimNeutronStarFamMinMassPerBranch
 
-    return SimNeutronStarFamMinCentralPressure(fam)
+    return SimNeutronStarFamMinMassPerBranch(fam, FIRST_BRANCH)
 
 
-def lalsim_SimNeutronStarFamMaxCentralPressure(fam):
-    from lalsimulation import SimNeutronStarFamMaxCentralPressure
+def lalsim_SimNeutronStarMaximumMass(fam):
+    """Maximum mass (kg) of the first stable branch of the family."""
+    from lalsimulation import SimNeutronStarFamMaxMassPerBranch
 
-    return SimNeutronStarFamMaxCentralPressure(fam)
+    return SimNeutronStarFamMaxMassPerBranch(fam, FIRST_BRANCH)
 
 
 def lalsim_SimNeutronStarRadius(mass_in_SI, fam):
-    from lalsimulation import SimNeutronStarRadius
+    """Radius (m) of the star of mass mass_in_SI (kg) on the first stable branch of the family."""
+    from lalsimulation import SimNeutronStarFamRadiusOfMassPerBranch
     try:
         mass_in_SI = float(mass_in_SI)
     except ValueError:
@@ -925,23 +992,12 @@ def lalsim_SimNeutronStarRadius(mass_in_SI, fam):
     except TypeError:
         raise TypeError("Unable to convert mass_in_SI to float.")
 
-    return SimNeutronStarRadius(mass_in_SI, fam)
-
-
-def lalsim_SimNeutronStarFamRadiusOfCentralPressure(pressure_in_SI, fam):
-    from lalsimulation import SimNeutronStarFamRadiusOfCentralPressure
-    try:
-        pressure_in_SI = float(pressure_in_SI)
-    except ValueError:
-        raise ValueError("Unable to convert ns_logpc1_SI to float.")
-    except TypeError:
-        raise TypeError("Unable to convert ns_logpc1_SI to float.")
-
-    return SimNeutronStarFamRadiusOfCentralPressure(pressure_in_SI, fam)
+    return SimNeutronStarFamRadiusOfMassPerBranch(mass_in_SI, fam, FIRST_BRANCH)
 
 
 def lalsim_SimNeutronStarLoveNumberK2(mass_in_SI, fam):
-    from lalsimulation import SimNeutronStarLoveNumberK2
+    """Love number k2 of the star of mass mass_in_SI (kg) on the first stable branch of the family."""
+    from lalsimulation import SimNeutronStarFamLoveNumberK2OfMassPerBranch
     try:
         mass_in_SI = float(mass_in_SI)
     except ValueError:
@@ -949,61 +1005,7 @@ def lalsim_SimNeutronStarLoveNumberK2(mass_in_SI, fam):
     except TypeError:
         raise TypeError("Unable to convert mass_in_SI to float.")
 
-    return SimNeutronStarLoveNumberK2(mass_in_SI, fam)
-
-
-def lalsim_SimNeutronStarFamLoveNumberK2OfCentralPressure(pressure_in_SI, fam):
-    from lalsimulation import SimNeutronStarFamLoveNumberK2OfCentralPressure
-    try:
-        pressure_in_SI = float(pressure_in_SI)
-    except ValueError:
-        raise ValueError("Unable to convert ns_logpc1_SI to float.")
-    except TypeError:
-        raise TypeError("Unable to convert ns_logpc1_SI to float.")
-
-    return SimNeutronStarFamLoveNumberK2OfCentralPressure(pressure_in_SI, fam)
-
-
-def lalsim_SimNeutronStarFamCentralPressureOfMass(mass_in_SI, fam):
-    from lalsimulation import SimNeutronStarFamCentralPressureOfMass
-    try: 
-        mass_in_SI = float(mass_in_SI)
-    except ValueError:
-        raise ValueError("Unable to convert mass_in_SI to float.")
-    except TypeError:
-        raise TypeError("Unable to convert mass_in_SI to float.")
-
-    return SimNeutronStarFamCentralPressureOfMass(mass_in_SI, fam)
-
-
-def lalsim_SimNeutronStarFamMassOfCentralPressure(pressure_in_SI, fam): 
-    from lalsimulation import SimNeutronStarFamMassOfCentralPressure
-    try: 
-        pressure_in_SI = float(pressure_in_SI)
-    except ValueError:
-        raise ValueError("Unable to convert pressure_in_SI to float.")
-    except TypeError:
-        raise TypeError("Unable to convert pressure_in_SI to float.")
-
-    return SimNeutronStarFamMassOfCentralPressure(pressure_in_SI, fam)
-
-
-def lalsim_SimNeutronStarFamNumberOfBranches(fam):
-    from lalsimulation import SimNeutronStarFamNumberOfBranches
-
-    return SimNeutronStarFamNumberOfBranches(fam)
-
-
-def lalsim_SimNeutronStarFamMinCentralPressurePerBranch(fam, branch_id):
-    from lalsimulation import SimNeutronStarFamMinCentralPressurePerBranch
-
-    return SimNeutronStarFamMinCentralPressurePerBranch(fam, branch_id)
-
-
-def lalsim_SimNeutronStarFamMaxCentralPressurePerBranch(fam, branch_id):
-    from lalsimulation import SimNeutronStarFamMaxCentralPressurePerBranch
-
-    return SimNeutronStarFamMaxCentralPressurePerBranch(fam, branch_id)
+    return SimNeutronStarFamLoveNumberK2OfMassPerBranch(mass_in_SI, fam, FIRST_BRANCH)
 
 
 @xp_wrap
