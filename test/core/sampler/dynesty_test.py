@@ -207,6 +207,69 @@ class TestDynesty(unittest.TestCase):
         self.assertEqual(self.dysampler.internal_sampler_next.naccept, 5)
         self.assertEqual(self.dysampler.internal_sampler_next.maxmcmc, 200)
 
+    def test_get_initial_points_from_prior_with_pool(self):
+        """
+        With a pool the initial live points are drawn in batches through pool.map; draws that fail
+        a prior constraint never reach the likelihood, and the returned arrays have the right shapes.
+        """
+
+        class CountingLikelihood(bilby.core.likelihood.Likelihood):
+            def __init__(self):
+                super().__init__()
+                self.calls = 0
+                self.saw_rejected_draw = False
+
+            def log_likelihood(self, parameters):
+                self.calls += 1
+                if parameters["a"] + parameters["b"] >= 1:
+                    self.saw_rejected_draw = True
+                return -parameters["a"] ** 2
+
+        class SerialPool:
+            def map(self, func, iterable):
+                return list(map(func, iterable))
+
+        def add_sum(parameters):
+            parameters["sum"] = parameters["a"] + parameters["b"]
+            return parameters
+
+        self.likelihood = CountingLikelihood()
+        self.priors = bilby.core.prior.PriorDict(
+            dict(
+                a=bilby.core.prior.Uniform(0, 1),
+                b=bilby.core.prior.Uniform(0, 1),
+                sum=bilby.core.prior.Constraint(0, 1),
+            ),
+            conversion_function=add_sum,
+        )
+        self.init_sampler()
+        bilby.core.sampler.base_sampler._initialize_global_variables(
+            self.likelihood,
+            self.priors,
+            self.sampler._search_parameter_keys,
+            False,
+            self.sampler.parameters,
+        )
+        self.sampler.pool = SerialPool()
+        npoints = 25
+        unit_cube, parameters, likelihood = self.sampler.get_initial_points_from_prior(npoints)
+        self.assertEqual(unit_cube.shape, (npoints, 2))
+        self.assertEqual(parameters.shape, (npoints, 2))
+        self.assertEqual(likelihood.shape, (npoints,))
+        self.assertTrue(np.all(parameters.sum(axis=1) < 1))
+        self.assertTrue(np.all(np.isfinite(likelihood)))
+        self.assertGreaterEqual(self.likelihood.calls, npoints)
+        self.assertFalse(self.likelihood.saw_rejected_draw)
+
+    def test_get_initial_points_from_prior_without_pool_uses_base_class(self):
+        self.sampler.pool = None
+        with mock.patch.object(
+            bilby.core.sampler.base_sampler.NestedSampler, "get_initial_points_from_prior",
+            return_value="base"
+        ) as base:
+            self.assertEqual(self.sampler.get_initial_points_from_prior(5), "base")
+            base.assert_called_once_with(5)
+
     def test_run_test_runs(self):
         self.sampler._run_test()
 

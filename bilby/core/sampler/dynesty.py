@@ -60,6 +60,36 @@ def _log_likelihood_wrapper(theta):
         return _sampling_convenience_dump.likelihood.log_likelihood(params)
 
 
+def _check_prior_and_log_likelihood_wrapper(unit):
+    """For parallel live-point initialization: transform, prior-check, then likelihood.
+
+    Evaluates the prior constraint (e.g. EOS/TOV check) before the expensive
+    likelihood so that rejected prior samples never reach the likelihood.
+
+    Returns (unit, theta, log_l) if both prior and likelihood are finite, else None.
+    """
+    from .base_sampler import _sampling_convenience_dump
+
+    dump = _sampling_convenience_dump
+    theta = dump.priors.rescale(dump.search_parameter_keys, unit)
+    sampling_params = {key: t for key, t in zip(dump.search_parameter_keys, theta)}
+
+    if not dump.priors.evaluate_constraints(sampling_params):
+        return None
+
+    params = deepcopy(dump.parameters)
+    params.update(sampling_params)
+    if dump.use_ratio:
+        log_l = dump.likelihood.log_likelihood_ratio(params)
+    else:
+        log_l = dump.likelihood.log_likelihood(params)
+
+    if not np.isfinite(log_l):
+        return None
+
+    return unit, theta, log_l
+
+
 class Dynesty(NestedSampler):
     """
     bilby wrapper of `dynesty.NestedSampler`
@@ -492,6 +522,63 @@ class Dynesty(NestedSampler):
         from dynesty.sampler import Sampler
 
         return Sampler
+
+    def get_initial_points_from_prior(self, npoints=1):
+        """Draw live points from the prior, parallelising over pool if available.
+
+        When self.pool is set, candidates are evaluated in batches via pool.map
+        so that prior constraint checks (e.g. EOS/TOV solver) and likelihood
+        evaluations run in parallel. Falls back to the serial base-class
+        implementation when no pool is configured.
+
+        The prior constraint is checked before the likelihood so that samples
+        rejected by a constraint (the common case for EOS priors) never incur
+        a likelihood evaluation.
+        """
+        if self.pool is None:
+            return super().get_initial_points_from_prior(npoints)
+
+        from ..utils import random
+
+        logger.info(
+            f"Generating {npoints} initial live points from the prior "
+            f"using {self.npool} parallel workers"
+        )
+        unit_cube = []
+        parameters = []
+        likelihood = []
+        # The first batch assumes every draw is accepted; later batches are sized from the
+        # observed acceptance so that priors with a cheap but restrictive constraint (EOS
+        # priors accept a few per cent) need few rounds while priors that accept everything
+        # do not evaluate the likelihood many more times than there are live points.
+        batch_size = 2 * npoints
+        n_proposed = 0
+
+        while len(unit_cube) < npoints:
+            units = random.rng.uniform(0, 1, (batch_size, self.ndim))
+            results = self.pool.map(_check_prior_and_log_likelihood_wrapper, units)
+            n_proposed += batch_size
+            for result in results:
+                if result is not None:
+                    u, theta, log_l = result
+                    unit_cube.append(u)
+                    parameters.append(theta)
+                    likelihood.append(log_l)
+            acceptance = len(unit_cube) / n_proposed
+            logger.info(
+                f"Generated {min(len(unit_cube), npoints)}/{npoints} live points "
+                f"(acceptance ~{acceptance:.1%})"
+            )
+            remaining = npoints - len(unit_cube)
+            if remaining > 0:
+                batch_size = int(np.ceil(1.5 * remaining / max(acceptance, 1 / n_proposed)))
+                batch_size = min(batch_size, 100 * npoints)
+
+        return (
+            np.array(unit_cube[:npoints]),
+            np.array(parameters[:npoints]),
+            np.array(likelihood[:npoints]),
+        )
 
     @signal_wrapper
     def run_sampler(self):
