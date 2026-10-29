@@ -262,7 +262,8 @@ class TestDynesty(unittest.TestCase):
         self.assertFalse(self.likelihood.saw_rejected_draw)
 
     def test_get_initial_points_from_prior_without_pool_uses_base_class(self):
-        self.sampler.pool = None
+        # No pool attribute at all, as before _setup_pool has run
+        self.assertFalse(hasattr(self.sampler, "pool"))
         with mock.patch.object(
             bilby.core.sampler.base_sampler.NestedSampler, "get_initial_points_from_prior",
             return_value="base"

@@ -535,7 +535,8 @@ class Dynesty(NestedSampler):
         rejected by a constraint (the common case for EOS priors) never incur
         a likelihood evaluation.
         """
-        if self.pool is None:
+        # self.pool only exists once _setup_pool has run; before that behave like the base class.
+        if getattr(self, "pool", None) is None:
             return super().get_initial_points_from_prior(npoints)
 
         from ..utils import random
