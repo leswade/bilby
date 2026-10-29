@@ -1070,6 +1070,20 @@ class TestEquationOfStateConversions(unittest.TestCase):
         self.assertTrue(eos_check)
         self.assertLess(mass_1, 0.5)
 
+    def test_central_pressures_with_direct_joining_pressures_is_rejected_clearly(self):
+        """
+        Central-pressure sampling is defined only with the reparameterised joining pressures.
+        Combining it with eos_polytrope_log10_pressure_1/2 must raise a clear error rather than
+        fall through to the mass-sampled branch and fail with a KeyError on mass_1_source.
+        """
+        parameters = dict(
+            eos_polytrope_gamma_0=2.8, eos_polytrope_gamma_1=2.5, eos_polytrope_gamma_2=2.0,
+            eos_polytrope_log10_pressure_1=34.4, eos_polytrope_log10_pressure_2=35.3,
+            ns_central_pressure_scale=1.72, ns_central_pressure_ratio=0.98,
+            luminosity_distance=40.0)
+        with self.assertRaisesRegex(ValueError, "eos_polytrope_scaled_pressure_ratio"):
+            conversion.convert_to_lal_binary_neutron_star_parameters(parameters)
+
     def test_convert_to_lal_binary_neutron_star_parameters_central_pressures(self):
         '''
         The full conversion with central pressures sampled: scalar input returns masses, tidal
