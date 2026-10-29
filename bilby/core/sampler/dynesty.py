@@ -587,7 +587,9 @@ class Dynesty(NestedSampler):
             )
             remaining = npoints - len(unit_cube)
             if remaining > 0:
-                batch_size = int(np.ceil(1.5 * remaining / max(acceptance, 1 / n_proposed)))
+                batch_size = int(
+                    np.ceil(1.5 * remaining / max(acceptance, 1 / n_proposed))
+                )
                 batch_size = min(batch_size, 100 * npoints)
 
         return (
