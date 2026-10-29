@@ -1357,22 +1357,43 @@ def mass_2_and_chirp_mass_to_mass_ratio(mass_2, chirp_mass):
     return 1 / mass_1_and_chirp_mass_to_mass_ratio(mass_2, chirp_mass)
 
 
+def _mass_ordered_tidal_inputs(lambda_1, lambda_2, mass_1, mass_2):
+    """
+    Order the inputs of the tidal combinations so that star 1 is the more massive one.
+
+    lambda_tilde and delta_lambda_tilde (Wade et al. 2014) are defined with
+    mass_1 >= mass_2: their formulas use (1 - 4 eta)**0.5 for the mass
+    difference (mass_1 - mass_2) / (mass_1 + mass_2). Star 1 can be the lighter
+    one when sampling central pressures on a multi-branch EOS, where star 1 is
+    the star with the higher central pressure. Swapping the stars elementwise
+    here keeps both combinations at their conventional, mass-ordered values
+    for any labelling, and leaves mass-ordered inputs unchanged.
+    """
+    xp = array_module(mass_1)
+    swap = mass_2 > mass_1
+    return (xp.where(swap, lambda_2, lambda_1), xp.where(swap, lambda_1, lambda_2),
+            xp.where(swap, mass_2, mass_1), xp.where(swap, mass_1, mass_2))
+
+
 def lambda_1_lambda_2_to_lambda_tilde(lambda_1, lambda_2, mass_1, mass_2):
     """
     Convert from individual tidal parameters to domainant tidal term.
 
     See, e.g., Wade et al., https://arxiv.org/pdf/1402.5156.pdf.
 
+    The result is the conventional one with star 1 the more massive star; the
+    inputs may be labelled either way (see _mass_ordered_tidal_inputs).
+
     Parameters
     ==========
     lambda_1: float
-        Tidal parameter of more massive neutron star.
+        Tidal parameter of neutron star 1.
     lambda_2: float
-        Tidal parameter of less massive neutron star.
+        Tidal parameter of neutron star 2.
     mass_1: float
-        Mass of more massive neutron star.
+        Mass of neutron star 1.
     mass_2: float
-        Mass of less massive neutron star.
+        Mass of neutron star 2.
 
     Returns
     =======
@@ -1380,6 +1401,7 @@ def lambda_1_lambda_2_to_lambda_tilde(lambda_1, lambda_2, mass_1, mass_2):
         Dominant tidal term.
 
     """
+    lambda_1, lambda_2, mass_1, mass_2 = _mass_ordered_tidal_inputs(lambda_1, lambda_2, mass_1, mass_2)
     eta = component_masses_to_symmetric_mass_ratio(mass_1, mass_2)
     lambda_plus = lambda_1 + lambda_2
     lambda_minus = lambda_1 - lambda_2
@@ -1396,22 +1418,28 @@ def lambda_1_lambda_2_to_delta_lambda_tilde(lambda_1, lambda_2, mass_1, mass_2):
 
     See, e.g., Wade et al., https://arxiv.org/pdf/1402.5156.pdf.
 
+    The result is the conventional one with star 1 the more massive star; the
+    inputs may be labelled either way (see _mass_ordered_tidal_inputs). Note
+    that delta_lambda_tilde changes sign under relabelling the stars, so this
+    is what fixes its sign.
+
     Parameters
     ==========
     lambda_1: float
-        Tidal parameter of more massive neutron star.
+        Tidal parameter of neutron star 1.
     lambda_2: float
-        Tidal parameter of less massive neutron star.
+        Tidal parameter of neutron star 2.
     mass_1: float
-        Mass of more massive neutron star.
+        Mass of neutron star 1.
     mass_2: float
-        Mass of less massive neutron star.
+        Mass of neutron star 2.
 
     Returns
     =======
     delta_lambda_tilde: float
         Second dominant tidal term.
     """
+    lambda_1, lambda_2, mass_1, mass_2 = _mass_ordered_tidal_inputs(lambda_1, lambda_2, mass_1, mass_2)
     eta = component_masses_to_symmetric_mass_ratio(mass_1, mass_2)
     lambda_plus = lambda_1 + lambda_2
     lambda_minus = lambda_1 - lambda_2
@@ -1428,6 +1456,9 @@ def lambda_tilde_delta_lambda_tilde_to_lambda_1_lambda_2(
     Convert from dominant tidal terms to individual tidal parameters.
 
     See, e.g., Wade et al., https://arxiv.org/pdf/1402.5156.pdf.
+
+    This inverse assumes mass_1 >= mass_2 and returns the tidal parameters in
+    mass order (lambda_1 belongs to the more massive star).
 
     Parameters
     ==========

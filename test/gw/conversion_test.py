@@ -194,6 +194,31 @@ class TestBasicConversions(unittest.TestCase):
         self.assertTrue((self.delta_lambda_tilde - delta_lambda_tilde) < 1e-5)
         self.assertEqual(aac.get_namespace(delta_lambda_tilde), self.xp)
 
+    def test_tidal_combinations_do_not_depend_on_star_labelling(self):
+        """
+        lambda_tilde and delta_lambda_tilde are defined with star 1 the more massive
+        star. Passing the lighter star as star 1 must give the same values, scalar
+        and elementwise.
+        """
+        lambda_tilde = conversion.lambda_1_lambda_2_to_lambda_tilde(
+            self.lambda_2, self.lambda_1, self.mass_2, self.mass_1
+        )
+        delta_lambda_tilde = conversion.lambda_1_lambda_2_to_delta_lambda_tilde(
+            self.lambda_2, self.lambda_1, self.mass_2, self.mass_1
+        )
+        self.assertTrue(abs(self.lambda_tilde - lambda_tilde) < 1e-5)
+        self.assertTrue(abs(self.delta_lambda_tilde - delta_lambda_tilde) < 1e-5)
+        # one array with both labellings
+        lambda_a = self.xp.stack([self.lambda_1, self.lambda_2])
+        lambda_b = self.xp.stack([self.lambda_2, self.lambda_1])
+        mass_a = self.xp.stack([self.mass_1, self.mass_2])
+        mass_b = self.xp.stack([self.mass_2, self.mass_1])
+        lambda_tilde = conversion.lambda_1_lambda_2_to_lambda_tilde(lambda_a, lambda_b, mass_a, mass_b)
+        delta_lambda_tilde = conversion.lambda_1_lambda_2_to_delta_lambda_tilde(lambda_a, lambda_b, mass_a, mass_b)
+        self.assertTrue(self.xp.all(abs(self.lambda_tilde - lambda_tilde) < 1e-5))
+        self.assertTrue(self.xp.all(abs(self.delta_lambda_tilde - delta_lambda_tilde) < 1e-5))
+        self.assertEqual(aac.get_namespace(lambda_tilde), self.xp)
+
     def test_identity_conversion(self):
         original_samples = dict(
             mass_1=self.mass_1,
