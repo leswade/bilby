@@ -66,8 +66,7 @@ def _check_prior_and_log_likelihood_wrapper(unit):
     Evaluates the prior constraint (e.g. EOS/TOV check) before the expensive
     likelihood so that rejected prior samples never reach the likelihood.
 
-    Returns (unit, theta, log_l) if both prior and likelihood pass
-    Sampler._check_bad_value, else None.
+    Returns (unit, theta, log_l) if both prior and likelihood are finite, else None.
     """
     from .base_sampler import _sampling_convenience_dump
 
@@ -75,19 +74,7 @@ def _check_prior_and_log_likelihood_wrapper(unit):
     theta = dump.priors.rescale(dump.search_parameter_keys, unit)
     sampling_params = {key: t for key, t in zip(dump.search_parameter_keys, theta)}
 
-    # Reject constraint failures first: this is cheap and is what the serial path does
-    # through _log_likelihood_wrapper (PriorDict.ln_prob alone does not apply constraints
-    # when the unconstrained log-prior is finite).
     if not dump.priors.evaluate_constraints(sampling_params):
-        return None
-    # Then apply the same acceptance test as the serial Sampler.check_draw: the prior and
-    # the likelihood must both pass _check_bad_value, which rejects inf, nan and the finite
-    # nan_to_num(-inf) sentinel that bilby likelihoods return when, e.g., waveform
-    # generation fails.
-    log_p = dump.priors.ln_prob(sampling_params)
-    if not Sampler._check_bad_value(
-        val=log_p, warning=False, theta=theta, label="prior"
-    ):
         return None
 
     params = deepcopy(dump.parameters)
@@ -97,9 +84,7 @@ def _check_prior_and_log_likelihood_wrapper(unit):
     else:
         log_l = dump.likelihood.log_likelihood(params)
 
-    if not Sampler._check_bad_value(
-        val=log_l, warning=False, theta=theta, label="likelihood"
-    ):
+    if not np.isfinite(log_l):
         return None
 
     return unit, theta, log_l
