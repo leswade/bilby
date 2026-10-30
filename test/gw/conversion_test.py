@@ -1093,11 +1093,37 @@ class TestEquationOfStateConversions(unittest.TestCase):
         p_hi = conversion.lalsim_SimNeutronStarFamMaxCentralPressurePerBranch(family, 0)
         self.assertTrue(conversion.central_pressure_is_on_stable_branch(np.sqrt(p_lo * p_hi), family))
         self.assertFalse(conversion.central_pressure_is_on_stable_branch(10 * p_hi, family))
-        # an EOS that fails the top-of-table causality check is rejected unless the check is skipped
+        # an acausal EOS is rejected unless the check is skipped
         stiff = (2.0, 34.0 + 1, 2.0, 34.5 + 1, 9.0)
         self.assertIsNone(conversion.polytrope_params_to_family(*stiff))
         self.assertFalse(conversion.polytrope_central_pressures_to_masses_and_lambdas(*stiff, 34.5, 34.3)[4])
         self.assertIsNotNone(conversion.polytrope_params_to_family(*stiff, causality_check=False))
+
+    def test_causality_is_judged_at_the_maximum_mass_star(self):
+        """
+        The central-pressure path constrains the sound speed only where stars exist: an EOS that is acausal
+        above its maximum-mass star is accepted, and one that is acausal inside that star is rejected even when
+        its top-of-table sound speed is within the 1.1 c margin of the mass-sampled paths.
+        """
+        def top_of_table_speed(params):
+            g0, lp1, g1, lp2, g2 = params
+            eos = conversion.lalsim_SimNeutronStarEOS3PieceDynamicPolytrope(g0, lp1 - 1, g1, lp2 - 1, g2)
+            h_max = conversion.lalsim_SimNeutronStarEOSMaxPseudoEnthalpy(eos)
+            return conversion.lalsim_SimNeutronStarEOSSpeedOfSoundGeometerized(h_max, eos)
+
+        # acausal only above the maximum-mass star (soft middle piece, stiff top piece): accepted
+        acausal_above_stars = (2.66, 34.95 + 1, 1.83, 35.79 + 1, 2.66)
+        self.assertGreater(top_of_table_speed(acausal_above_stars), 1.1)
+        self.assertIsNotNone(conversion.polytrope_params_to_family(*acausal_above_stars))
+        # acausal in a stiff middle piece that the maximum-mass star reaches, soft top piece: rejected
+        acausal_inside_star = (5.21, 35.43 + 1, 4.86, 35.92 + 1, 2.07)
+        self.assertLessEqual(top_of_table_speed(acausal_inside_star), 1.1)
+        self.assertIsNone(conversion.polytrope_params_to_family(*acausal_inside_star))
+        family = conversion.polytrope_params_to_family(*acausal_inside_star, causality_check=False)
+        self.assertIsNotNone(family)
+        eos = conversion.lalsim_SimNeutronStarEOS3PieceDynamicPolytrope(
+            5.21, 35.43, 4.86, 35.92, 2.07)
+        self.assertFalse(conversion.eos_is_causal_at_maximum_mass_star(eos, family))
 
     def test_central_pressures_with_direct_joining_pressures_is_rejected_clearly(self):
         """

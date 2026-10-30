@@ -30,7 +30,10 @@ from .utils import (lalsim_SimNeutronStarEOS4ParamSDGammaCheck,
                     lalsim_SimNeutronStarFamLoveNumberK2OfCentralPressure,
                     lalsim_SimNeutronStarFamNumberOfBranches,
                     lalsim_SimNeutronStarFamMinCentralPressurePerBranch,
-                    lalsim_SimNeutronStarFamMaxCentralPressurePerBranch)
+                    lalsim_SimNeutronStarFamMaxCentralPressurePerBranch,
+                    lalsim_SimNeutronStarFamMassOfCentralPressurePerBranch,
+                    lalsim_SimNeutronStarEOSMinAcausalPseudoEnthalpy,
+                    lalsim_SimNeutronStarEOSPseudoEnthalpyOfPressure)
 
 from ..compat.utils import array_module
 from ..core.likelihood import MarginalizedLikelihoodReconstructionError
@@ -985,26 +988,37 @@ def lambda_from_central_pressure_and_family(pressure_si, mass_source, family):
     return lambda_i
 
 
-def eos_is_causal_at_maximum_pseudo_enthalpy(eos):
+def eos_is_causal_at_maximum_mass_star(eos, family):
     """
-    The cheap causality check of the EOS sampling paths: the speed of sound at
-    the maximum pseudo-enthalpy of the EOS table must not exceed 1.1 c.
+    The causality check of the central-pressure sampling path: the speed of sound
+    must not exceed c anywhere inside the maximum-mass star.
 
-    This tests the EOS at the top of its table, above any stable star. Callers that
-    want to constrain the EOS only where stars exist (for example at the maximum-mass
-    star) can skip it with ``causality_check=False`` in polytrope_params_to_family.
+    The maximum-mass star is the top of whichever stable branch of the family reaches
+    the largest mass. The EOS passes when that star's central pseudo-enthalpy is at or
+    below the lowest pseudo-enthalpy at which the EOS becomes acausal, so the EOS is
+    constrained only where stars exist. (neutron_star_family_physical_check, used by
+    the mass-sampled paths, instead tests the top of the EOS table against 1.1 c.)
 
     Parameters
     ----------
     eos: lalsim swig-wrapped eos object
+    family: lalsim family object
+        The family of that EOS (any fam_flag).
 
     Returns
     -------
     bool
     """
-    max_pseudo_enthalpy = lalsim_SimNeutronStarEOSMaxPseudoEnthalpy(eos)
-    max_speed_of_sound = lalsim_SimNeutronStarEOSSpeedOfSoundGeometerized(max_pseudo_enthalpy, eos)
-    return max_speed_of_sound <= 1.1
+    h_acausal = lalsim_SimNeutronStarEOSMinAcausalPseudoEnthalpy(eos)
+    p_top, m_top = None, -1.0
+    for i in range(lalsim_SimNeutronStarFamNumberOfBranches(family)):
+        p_hi = lalsim_SimNeutronStarFamMaxCentralPressurePerBranch(family, i)
+        m_hi = lalsim_SimNeutronStarFamMassOfCentralPressurePerBranch(p_hi, family, i)
+        if m_hi > m_top:
+            p_top, m_top = p_hi, m_hi
+    if p_top is None:
+        return False
+    return lalsim_SimNeutronStarEOSPseudoEnthalpyOfPressure(p_top, eos) <= h_acausal
 
 
 def polytrope_params_to_family(
@@ -1028,24 +1042,26 @@ def polytrope_params_to_family(
         Which interpolators the family builds (see lalsim_CreateSimNeutronStarFamily);
         2 (pressure-indexed) is what the central-pressure functions need.
     causality_check: bool
-        Reject the EOS when eos_is_causal_at_maximum_pseudo_enthalpy fails (the default
-        of the sampling paths).
+        Reject the EOS when eos_is_causal_at_maximum_mass_star fails (the default of
+        the sampling path). With False the family is returned regardless, for callers
+        that apply the check themselves or want the family of an acausal EOS.
 
     Returns
     -------
     family: lalsim family object, or None
-        None when the EOS fails the causality check or has no stable branch.
+        None when the EOS has no stable branch or fails the causality check.
     """
     eos = lalsim_SimNeutronStarEOS3PieceDynamicPolytrope(
         gamma_0, log10_eos_pressure_1_cgs - 1.,
         gamma_1, log10_eos_pressure_2_cgs - 1.,
         gamma_2)
-    if causality_check and not eos_is_causal_at_maximum_pseudo_enthalpy(eos):
-        return None
     try:
-        return lalsim_CreateSimNeutronStarFamily(eos, fam_flag=fam_flag)
+        family = lalsim_CreateSimNeutronStarFamily(eos, fam_flag=fam_flag)
     except RuntimeError:  # no stable branch
         return None
+    if causality_check and not eos_is_causal_at_maximum_mass_star(eos, family):
+        return None
+    return family
 
 
 def central_pressure_is_on_stable_branch(pressure_si, family):
@@ -1123,9 +1139,9 @@ def polytrope_central_pressures_to_masses_and_lambdas(
     maps uniquely to one stable branch, breaking the mass-radius degeneracy in
     twin-star EOSs.
 
-    A sample is accepted when the EOS is causal (speed of sound at the maximum
-    pseudo-enthalpy at most 1.1 c) and both central pressures lie on a stable
-    branch of the family; no further cut is made on the derived masses or
+    A sample is accepted when the EOS is causal (speed of sound at most c inside
+    the maximum-mass star, eos_is_causal_at_maximum_mass_star) and both central
+    pressures lie on a stable branch of the family; no further cut is made on the derived masses or
     tidal deformabilities. Rejected samples return eos_check = False with NaN
     masses and zero tidal deformabilities. Central pressure 1 is the larger one,
     so mass_1 >= mass_2 on a single branch; on a multi-branch EOS the star with

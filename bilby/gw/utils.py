@@ -943,10 +943,25 @@ def lalsim_SimNeutronStarFamMaxCentralPressurePerBranch(fam, branch_id):
     return SimNeutronStarFamMaxCentralPressurePerBranch(fam, branch_id)
 
 
+def lalsim_SimNeutronStarFamMassOfCentralPressurePerBranch(pressure_in_SI, fam, branch_id):
+    from lalsimulation import SimNeutronStarFamMassOfCentralPressurePerBranch
+    return SimNeutronStarFamMassOfCentralPressurePerBranch(pressure_in_SI, fam, branch_id)
+
+
 def lalsim_SimNeutronStarEOSMaxPseudoEnthalpy(eos):
     from lalsimulation import SimNeutronStarEOSMaxPseudoEnthalpy
 
     return SimNeutronStarEOSMaxPseudoEnthalpy(eos)
+
+
+def lalsim_SimNeutronStarEOSMinAcausalPseudoEnthalpy(eos):
+    from lalsimulation import SimNeutronStarEOSMinAcausalPseudoEnthalpy
+    return SimNeutronStarEOSMinAcausalPseudoEnthalpy(eos)
+
+
+def lalsim_SimNeutronStarEOSPseudoEnthalpyOfPressure(pressure_in_SI, eos):
+    from lalsimulation import SimNeutronStarEOSPseudoEnthalpyOfPressure
+    return SimNeutronStarEOSPseudoEnthalpyOfPressure(pressure_in_SI, eos)
 
 
 def lalsim_SimNeutronStarEOSSpeedOfSoundGeometerized(max_pseudo_enthalpy, eos):
