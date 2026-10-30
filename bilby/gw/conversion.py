@@ -985,6 +985,132 @@ def lambda_from_central_pressure_and_family(pressure_si, mass_source, family):
     return lambda_i
 
 
+def eos_is_causal_at_maximum_pseudo_enthalpy(eos):
+    """
+    The cheap causality check of the EOS sampling paths: the speed of sound at
+    the maximum pseudo-enthalpy of the EOS table must not exceed 1.1 c.
+
+    This tests the EOS at the top of its table, above any stable star. Callers that
+    want to constrain the EOS only where stars exist (for example at the maximum-mass
+    star) can skip it with ``causality_check=False`` in polytrope_params_to_family.
+
+    Parameters
+    ----------
+    eos: lalsim swig-wrapped eos object
+
+    Returns
+    -------
+    bool
+    """
+    max_pseudo_enthalpy = lalsim_SimNeutronStarEOSMaxPseudoEnthalpy(eos)
+    max_speed_of_sound = lalsim_SimNeutronStarEOSSpeedOfSoundGeometerized(max_pseudo_enthalpy, eos)
+    return max_speed_of_sound <= 1.1
+
+
+def polytrope_params_to_family(
+        gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_2_cgs, gamma_2,
+        fam_flag=2, causality_check=True):
+    """
+    Build the 3-piece dynamic polytrope EOS and its neutron star family (TOV sequence
+    with all stable branches).
+
+    This is the EOS-level half of the central-pressure sampling path: it is done once
+    per EOS, after which any number of stars can be evaluated on the family with
+    masses_and_lambdas_from_central_pressures.
+
+    Parameters
+    ----------
+    gamma_0, gamma_1, gamma_2: float
+        Piecewise polytrope adiabatic indices.
+    log10_eos_pressure_1_cgs, log10_eos_pressure_2_cgs: float
+        EOS dividing pressures in log10 CGS units.
+    fam_flag: int
+        Which interpolators the family builds (see lalsim_CreateSimNeutronStarFamily);
+        2 (pressure-indexed) is what the central-pressure functions need.
+    causality_check: bool
+        Reject the EOS when eos_is_causal_at_maximum_pseudo_enthalpy fails (the default
+        of the sampling paths).
+
+    Returns
+    -------
+    family: lalsim family object, or None
+        None when the EOS fails the causality check or has no stable branch.
+    """
+    eos = lalsim_SimNeutronStarEOS3PieceDynamicPolytrope(
+        gamma_0, log10_eos_pressure_1_cgs - 1.,
+        gamma_1, log10_eos_pressure_2_cgs - 1.,
+        gamma_2)
+    if causality_check and not eos_is_causal_at_maximum_pseudo_enthalpy(eos):
+        return None
+    try:
+        return lalsim_CreateSimNeutronStarFamily(eos, fam_flag=fam_flag)
+    except RuntimeError:  # no stable branch
+        return None
+
+
+def central_pressure_is_on_stable_branch(pressure_si, family):
+    """
+    Whether a central pressure (Pa) lies inside one of the stable branches of a family.
+
+    Parameters
+    ----------
+    pressure_si: float
+        NS central pressure in Pa (SI).
+    family: lalsim family object
+
+    Returns
+    -------
+    bool
+    """
+    n_branches = lalsim_SimNeutronStarFamNumberOfBranches(family)
+    return any(
+        lalsim_SimNeutronStarFamMinCentralPressurePerBranch(family, i) <= pressure_si <=
+        lalsim_SimNeutronStarFamMaxCentralPressurePerBranch(family, i)
+        for i in range(n_branches))
+
+
+def masses_and_lambdas_from_central_pressures(
+        log10_ns_central_pressure_1_si, log10_ns_central_pressure_2_si, family):
+    """
+    Source-frame masses and tidal deformabilities of the two stars with the given
+    central pressures on a pressure-indexed family (the star-level half of the
+    central-pressure sampling path).
+
+    A pair is accepted when both central pressures lie on a stable branch; no further
+    cut is made on the derived masses or tidal deformabilities. Rejected pairs return
+    eos_check = False with NaN masses and zero tidal deformabilities. Central pressure 1
+    is meant to be the larger one, so mass_1 >= mass_2 on a single branch; on a
+    multi-branch EOS the star with the larger central pressure can be the lighter one.
+
+    Parameters
+    ----------
+    log10_ns_central_pressure_1_si, log10_ns_central_pressure_2_si: float
+        NS central pressures in log10 Pa (SI).
+    family: lalsim family object
+        Pressure-indexed family (fam_flag 2 or 3), e.g. from polytrope_params_to_family.
+
+    Returns
+    -------
+    mass_1_source, mass_2_source: float
+        Source-frame component masses in solar masses.
+    lambda_1, lambda_2: float
+        Tidal deformability parameters.
+    eos_check: bool
+        Whether both stars exist.
+    """
+    rejected = (np.nan, np.nan, 0.0, 0.0, False)
+    p1_si = 10. ** log10_ns_central_pressure_1_si
+    p2_si = 10. ** log10_ns_central_pressure_2_si
+    if not (central_pressure_is_on_stable_branch(p1_si, family) and
+            central_pressure_is_on_stable_branch(p2_si, family)):
+        return rejected
+    mass_1_source = lalsim_SimNeutronStarFamMassOfCentralPressure(p1_si, family) / solar_mass
+    mass_2_source = lalsim_SimNeutronStarFamMassOfCentralPressure(p2_si, family) / solar_mass
+    lambda_1 = lambda_from_central_pressure_and_family(p1_si, mass_1_source, family)
+    lambda_2 = lambda_from_central_pressure_and_family(p2_si, mass_2_source, family)
+    return mass_1_source, mass_2_source, lambda_1, lambda_2, True
+
+
 @lru_cache(maxsize=1)
 def polytrope_central_pressures_to_masses_and_lambdas(
         gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_2_cgs, gamma_2,
@@ -1005,6 +1131,10 @@ def polytrope_central_pressures_to_masses_and_lambdas(
     so mass_1 >= mass_2 on a single branch; on a multi-branch EOS the star with
     the larger central pressure can be the lighter one.
 
+    This is polytrope_params_to_family followed by
+    masses_and_lambdas_from_central_pressures; code that evaluates many stars on
+    one EOS should call those two directly so the family is built once.
+
     Parameters
     ----------
     gamma_0, gamma_1, gamma_2: float
@@ -1024,37 +1154,12 @@ def polytrope_central_pressures_to_masses_and_lambdas(
         Whether the EOS and pressure combination is physically valid.
 
     """
-    rejected = (np.nan, np.nan, 0.0, 0.0, False)
-    eos = lalsim_SimNeutronStarEOS3PieceDynamicPolytrope(
-        gamma_0, log10_eos_pressure_1_cgs - 1.,
-        gamma_1, log10_eos_pressure_2_cgs - 1.,
-        gamma_2)
-    max_pseudo_enthalpy = lalsim_SimNeutronStarEOSMaxPseudoEnthalpy(eos)
-    max_speed_of_sound = lalsim_SimNeutronStarEOSSpeedOfSoundGeometerized(max_pseudo_enthalpy, eos)
-    if max_speed_of_sound > 1.1:
-        return rejected
-    try:
-        family = lalsim_CreateSimNeutronStarFamily(eos, fam_flag=2)
-    except RuntimeError:  # no stable branch
-        return rejected
-    p1_si = 10. ** log10_ns_central_pressure_1_si
-    p2_si = 10. ** log10_ns_central_pressure_2_si
-    n_branches = lalsim_SimNeutronStarFamNumberOfBranches(family)
-    p1_valid = any(
-        lalsim_SimNeutronStarFamMinCentralPressurePerBranch(family, i) <= p1_si <=
-        lalsim_SimNeutronStarFamMaxCentralPressurePerBranch(family, i)
-        for i in range(n_branches))
-    p2_valid = any(
-        lalsim_SimNeutronStarFamMinCentralPressurePerBranch(family, i) <= p2_si <=
-        lalsim_SimNeutronStarFamMaxCentralPressurePerBranch(family, i)
-        for i in range(n_branches))
-    if not (p1_valid and p2_valid):
-        return rejected
-    mass_1_source = lalsim_SimNeutronStarFamMassOfCentralPressure(p1_si, family) / solar_mass
-    mass_2_source = lalsim_SimNeutronStarFamMassOfCentralPressure(p2_si, family) / solar_mass
-    lambda_1 = lambda_from_central_pressure_and_family(p1_si, mass_1_source, family)
-    lambda_2 = lambda_from_central_pressure_and_family(p2_si, mass_2_source, family)
-    return mass_1_source, mass_2_source, lambda_1, lambda_2, True
+    family = polytrope_params_to_family(
+        gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_2_cgs, gamma_2)
+    if family is None:
+        return (np.nan, np.nan, 0.0, 0.0, False)
+    return masses_and_lambdas_from_central_pressures(
+        log10_ns_central_pressure_1_si, log10_ns_central_pressure_2_si, family)
 
 
 def eos_family_physical_check(eos):

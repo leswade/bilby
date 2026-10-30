@@ -1070,6 +1070,35 @@ class TestEquationOfStateConversions(unittest.TestCase):
         self.assertTrue(eos_check)
         self.assertLess(mass_1, 0.5)
 
+    def test_family_and_star_halves_reproduce_the_central_pressure_conversion(self):
+        """
+        polytrope_params_to_family followed by masses_and_lambdas_from_central_pressures gives the same stars as
+        the one-call function, the family is reused across stars, and the rejections are reported the same way.
+        """
+        eos = (2.8, 34.4 + 1, 2.5, 35.3 + 1, 2.0)      # log10 pressures in cgs
+        family = conversion.polytrope_params_to_family(*eos)
+        self.assertIsNotNone(family)
+        for log10_p1, log10_p2 in [(34.51, 34.49), (35.0, 34.0), (36.8, 33.5)]:
+            expected = conversion.polytrope_central_pressures_to_masses_and_lambdas(*eos, log10_p1, log10_p2)
+            got = conversion.masses_and_lambdas_from_central_pressures(log10_p1, log10_p2, family)
+            self.assertEqual(expected[4], got[4])
+            if got[4]:
+                for e, g in zip(expected[:4], got[:4]):
+                    self.assertEqual(e, g)
+            else:
+                self.assertTrue(np.isnan(got[0]) and np.isnan(got[1]))
+                self.assertEqual(got[2:4], (0.0, 0.0))
+        # the star-level check alone
+        p_lo = conversion.lalsim_SimNeutronStarFamMinCentralPressurePerBranch(family, 0)
+        p_hi = conversion.lalsim_SimNeutronStarFamMaxCentralPressurePerBranch(family, 0)
+        self.assertTrue(conversion.central_pressure_is_on_stable_branch(np.sqrt(p_lo * p_hi), family))
+        self.assertFalse(conversion.central_pressure_is_on_stable_branch(10 * p_hi, family))
+        # an EOS that fails the top-of-table causality check is rejected unless the check is skipped
+        stiff = (2.0, 34.0 + 1, 2.0, 34.5 + 1, 9.0)
+        self.assertIsNone(conversion.polytrope_params_to_family(*stiff))
+        self.assertFalse(conversion.polytrope_central_pressures_to_masses_and_lambdas(*stiff, 34.5, 34.3)[4])
+        self.assertIsNotNone(conversion.polytrope_params_to_family(*stiff, causality_check=False))
+
     def test_central_pressures_with_direct_joining_pressures_is_rejected_clearly(self):
         """
         Central-pressure sampling is defined only with the reparameterised joining pressures.
