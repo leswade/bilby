@@ -1310,6 +1310,56 @@ def polytrope_central_pressures_to_masses_and_lambdas(
         log10_ns_central_pressure_1_si, log10_ns_central_pressure_2_si, family)
 
 
+def hybrid_central_pressures_to_masses_and_lambdas( # FIXME: Still has another function's docstring. 
+        gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_t_cgs, deps, cs2
+        log10_ns_central_pressure_1_si, log10_ns_central_pressure_2_si):
+    """
+    Compute source-frame masses and tidal deformabilities from polytrope EOS parameters
+    and NS central pressures (pressure-based sampling pathway).
+
+    Uses a pressure-indexed NS family (fam_flag=2) so that each central pressure
+    maps uniquely to one stable branch, breaking the mass-radius degeneracy in
+    twin-star EOSs.
+
+    A sample is accepted when the EOS is causal (speed of sound at most c inside
+    the maximum-mass star, eos_is_causal_at_maximum_mass_star) and both central
+    pressures lie on a stable branch of the family; no further cut is made on the derived masses or
+    tidal deformabilities. Rejected samples return eos_check = False with NaN
+    masses and zero tidal deformabilities. Central pressure 1 is the larger one,
+    so mass_1 >= mass_2 on a single branch; on a multi-branch EOS the star with
+    the larger central pressure can be the lighter one.
+
+    This is polytrope_params_to_family followed by
+    masses_and_lambdas_from_central_pressures; code that evaluates many stars on
+    one EOS should call those two directly so the family is built once.
+        
+    Parameters
+    ----------
+    gamma_0, gamma_1, gamma_2: float
+        Piecewise polytrope adiabatic indices.
+    log10_eos_pressure_1_cgs, log10_eos_pressure_2_cgs: float
+        EOS dividing pressures in log10 CGS units.
+    log10_ns_central_pressure_1_si, log10_ns_central_pressure_2_si: float
+        NS central pressures in log10 Pa (SI).
+
+    Returns
+    -------
+    mass_1_source, mass_2_source: float
+        Source-frame component masses in solar masses.
+    lambda_1, lambda_2: float
+        Tidal deformability parameters.
+    eos_check: bool
+        Whether the EOS and pressure combination is physically valid.
+
+    """
+    family = hybrid_params_to_family(
+        gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_t_cgs, )
+    if family is None:
+        return (np.nan, np.nan, 0.0, 0.0, False)
+    return masses_and_lambdas_from_central_pressures(
+        log10_ns_central_pressure_1_si, log10_ns_central_pressure_2_si, family)
+
+
 def eos_family_physical_check(eos):
     """
     Function that determines if the EoS family contains
