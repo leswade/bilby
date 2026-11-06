@@ -468,6 +468,93 @@ def convert_to_lal_binary_neutron_star_parameters(parameters):
                 converted_parameters[key] = float_eos_params[key]
     elif 'ns_central_pressure_scale' in converted_parameters.keys() and \
             'eos_polytrope_gamma_0' in converted_parameters.keys():
+        float_eos_params = {} 
+        max_len = 1
+        eos_keys = ['eos_polytrope_gamma_0',
+                    'eos_polytrope_gamma_1',
+                    'eos_polytrope_gamma_2',
+                    'eos_polytrope_scaled_pressure_ratio',
+                    'eos_polytrope_scaled_pressure_2',
+                    'ns_central_pressure_ratio',
+                    'ns_central_pressure_scale',
+                    'luminosity_distance']
+        for key in eos_keys:
+            try: 
+                if (len(converted_parameters[key]) > max_len):
+                    max_len = len(converted_parameters[key])
+            except TypeError:
+                float_eos_params[key] = converted_parameters[key]
+        if len(float_eos_params) == len(eos_keys):  # case where all params are floats (single sample)
+            logp1, logp2 = log_pressure_reparameterization_conversion(
+                converted_parameters['eos_polytrope_scaled_pressure_ratio'],
+                converted_parameters['eos_polytrope_scaled_pressure_2'])
+            log10_ns_cp1, log10_ns_cp2 = central_pressure_reparameterization_conversion(
+                converted_parameters['ns_central_pressure_ratio'],
+                converted_parameters['ns_central_pressure_scale'])
+            mass_1_source, mass_2_source, lambda_1, lambda_2, eos_check = \
+                polytrope_central_pressures_to_masses_and_lambdas(
+                    converted_parameters['eos_polytrope_gamma_0'],
+                    logp1,
+                    converted_parameters['eos_polytrope_gamma_1'],
+                    logp2,
+                    converted_parameters['eos_polytrope_gamma_2'],
+                    log10_ns_cp1,
+                    log10_ns_cp2)
+            redshift = luminosity_distance_to_redshift(converted_parameters['luminosity_distance'])
+            converted_parameters['redshift'] = redshift
+            converted_parameters['mass_1_source'] = mass_1_source
+            converted_parameters['mass_2_source'] = mass_2_source
+            converted_parameters['mass_1'] = mass_1_source * (1.0 + redshift)
+            converted_parameters['mass_2'] = mass_2_source * (1.0 + redshift)
+            converted_parameters['lambda_1'] = lambda_1
+            converted_parameters['lambda_2'] = lambda_2
+            converted_parameters['eos_check'] = eos_check
+        elif len(float_eos_params) < len(eos_keys):  # case where some or none are floats (batch of samples)
+            for key in float_eos_params.keys():
+                converted_parameters[key] = np.ones(max_len) * converted_parameters[key]
+            pg0 = converted_parameters['eos_polytrope_gamma_0']
+            pg1 = converted_parameters['eos_polytrope_gamma_1']
+            pg2 = converted_parameters['eos_polytrope_gamma_2']
+            scaledratio = converted_parameters['eos_polytrope_scaled_pressure_ratio']
+            scaled_p2 = converted_parameters['eos_polytrope_scaled_pressure_2']
+            ns_cp_ratio = converted_parameters['ns_central_pressure_ratio']
+            ns_cp_scale = converted_parameters['ns_central_pressure_scale']
+            lum_dist = converted_parameters['luminosity_distance']
+            all_mass_1_source = np.empty(0)
+            all_mass_2_source = np.empty(0)
+            all_lambda_1 = np.empty(0)
+            all_lambda_2 = np.empty(0)
+            all_eos_check = np.empty(0, dtype=bool)
+            all_redshift = np.empty(0)
+            all_mass_1 = np.empty(0)
+            all_mass_2 = np.empty(0)
+            for (pg_0, pg_1, pg_2, scaled_ratio, scaled_p_2, ns_r, ns_s, ld) in zip( 
+                    pg0, pg1, pg2, scaledratio, scaled_p2, ns_cp_ratio, ns_cp_scale, lum_dist):
+                logp_1, logp_2 = log_pressure_reparameterization_conversion(scaled_ratio, scaled_p_2)
+                log10_ns_cp_1, log10_ns_cp_2 = central_pressure_reparameterization_conversion(ns_r, ns_s)
+                m1s, m2s, lam1, lam2, eos_chk = polytrope_central_pressures_to_masses_and_lambdas(
+                    pg_0, logp_1, pg_1, logp_2, pg_2, log10_ns_cp_1, log10_ns_cp_2)
+                z = luminosity_distance_to_redshift(ld)
+                all_mass_1_source = np.append(all_mass_1_source, m1s) 
+                all_mass_2_source = np.append(all_mass_2_source, m2s) 
+                all_lambda_1 = np.append(all_lambda_1, lam1)
+                all_lambda_2 = np.append(all_lambda_2, lam2)
+                all_eos_check = np.append(all_eos_check, eos_chk)
+                all_redshift = np.append(all_redshift, z)
+                all_mass_1 = np.append(all_mass_1, m1s * (1.0 + z))
+                all_mass_2 = np.append(all_mass_2, m2s * (1.0 + z))
+            converted_parameters['mass_1_source'] = all_mass_1_source
+            converted_parameters['mass_2_source'] = all_mass_2_source
+            converted_parameters['lambda_1'] = all_lambda_1
+            converted_parameters['lambda_2'] = all_lambda_2
+            converted_parameters['eos_check'] = all_eos_check
+            converted_parameters['redshift'] = all_redshift
+            converted_parameters['mass_1'] = all_mass_1
+            converted_parameters['mass_2'] = all_mass_2
+            for key in float_eos_params.keys():
+                converted_parameters[key] = float_eos_params[key]
+    elif 'ns_central_pressure_scale' in converted_parameters.keys() and \
+            'eos_polytrope_gamma_0' in converted_parameters.keys():
         float_eos_params = {}
         max_len = 1
         eos_keys = ['eos_polytrope_gamma_0',
@@ -1059,6 +1146,49 @@ def polytrope_params_to_family(
         gamma_2)
     try:
         family = lalsim_CreateSimNeutronStarFamily(eos, fam_flag=fam_flag)
+    except RuntimeError:  # no stable branch
+        return None
+    if causality_check and not eos_is_causal_at_maximum_mass_star(eos, family):
+        return None
+    return family
+
+
+def hybrid_params_to_family( # FIXME: the docstring is from a different function
+        gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_t_cgs, deps, 
+        cs2, fam_flag=2, causality_check=True):
+    """
+    Build the 3-piece dynamic polytrope EOS and its neutron star family (TOV sequence
+    with all stable branches).
+
+    This is the EOS-level half of the central-pressure sampling path: it is done once
+    per EOS, after which any number of stars can be evaluated on the family with
+    masses_and_lambdas_from_central_pressures.
+
+    Parameters
+    ----------
+    gamma_0, gamma_1, gamma_2: float
+        Piecewise polytrope adiabatic indices.
+    log10_eos_pressure_1_cgs, log10_eos_pressure_2_cgs: float
+        EOS dividing pressures in log10 CGS units.
+    fam_flag: int
+        Which interpolators the family builds (see lalsim_CreateSimNeutronStarFamily);
+        2 (pressure-indexed) is what the central-pressure functions need.
+    causality_check: bool
+        Reject the EOS when eos_is_causal_at_maximum_mass_star fails (the default of
+        the sampling path). With False the family is returned regardless, for callers
+        that apply the check themselves or want the family of an acausal EOS.
+
+    Returns
+    -------
+    family: lalsim family object, or None
+        None when the EOS has no stable branch or fails the causality check.
+    """
+    eos = lalsim_SimNeutronStarEOS3PieceDynamicPolytrope(
+        gamma_0, log10_eos_pressure_1_cgs - 1.,
+        gamma_1, log10_eos_pressure_t_cgs - 1.,
+        deps, cs2)
+    try:
+        family = lalsim_SimNeutronStarEOS6ParameterHybrid(eos, fam_flag=fam_flag)
     except RuntimeError:  # no stable branch
         return None
     if causality_check and not eos_is_causal_at_maximum_mass_star(eos, family):
