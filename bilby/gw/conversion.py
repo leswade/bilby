@@ -329,7 +329,7 @@ def convert_to_lal_binary_neutron_star_parameters(parameters):
     if not any([key in converted_parameters for key in
                 ['lambda_1', 'lambda_2',
                  'lambda_tilde', 'delta_lambda_tilde', 'lambda_symmetric',
-                 'eos_polytrope_gamma_0', 'eos_spectral_pca_gamma_0', 'eos_v1']]):
+                 'eos_polytrope_gamma_0', 'eos_hybrid_gamma_0', 'eos_spectral_pca_gamma_0', 'eos_v1']]):
         converted_parameters['lambda_1'] = 0
         converted_parameters['lambda_2'] = 0
         added_keys = added_keys + ['lambda_1', 'lambda_2']
@@ -554,14 +554,15 @@ def convert_to_lal_binary_neutron_star_parameters(parameters):
             for key in float_eos_params.keys():
                 converted_parameters[key] = float_eos_params[key]
     elif 'ns_central_pressure_scale' in converted_parameters.keys() and \
-            'eos_polytrope_gamma_0' in converted_parameters.keys():
+            'eos_hybrid_gamma_0' in converted_parameters.keys():
         float_eos_params = {}
         max_len = 1
-        eos_keys = ['eos_polytrope_gamma_0',
-                    'eos_polytrope_gamma_1',
-                    'eos_polytrope_gamma_2',
-                    'eos_polytrope_scaled_pressure_ratio',
-                    'eos_polytrope_scaled_pressure_2',
+        eos_keys = ['eos_hybrid_gamma_0',
+                    'eos_hybrid_gamma_1',
+                    'eos_hybrid_scaled_pressure_ratio',
+                    'eos_hybrid_scaled_pressure_t',
+                    'eos_hybrid_energy_jump',
+                    'eos_hybrid_cs2',
                     'ns_central_pressure_ratio',
                     'ns_central_pressure_scale',
                     'luminosity_distance']
@@ -572,19 +573,20 @@ def convert_to_lal_binary_neutron_star_parameters(parameters):
             except TypeError:
                 float_eos_params[key] = converted_parameters[key]
         if len(float_eos_params) == len(eos_keys):  # case where all params are floats (single sample)
-            logp1, logp2 = log_pressure_reparameterization_conversion(
-                converted_parameters['eos_polytrope_scaled_pressure_ratio'],
-                converted_parameters['eos_polytrope_scaled_pressure_2'])
+            logp1, logpt = log_pressure_reparameterization_conversion(
+                converted_parameters['eos_hybrid_scaled_pressure_ratio'],
+                converted_parameters['eos_hybrid_scaled_pressure_t'])
             log10_ns_cp1, log10_ns_cp2 = central_pressure_reparameterization_conversion(
                 converted_parameters['ns_central_pressure_ratio'],
                 converted_parameters['ns_central_pressure_scale'])
             mass_1_source, mass_2_source, lambda_1, lambda_2, eos_check = \
-                polytrope_central_pressures_to_masses_and_lambdas(
-                    converted_parameters['eos_polytrope_gamma_0'],
+                hybrid_central_pressures_to_masses_and_lambdas(
+                    converted_parameters['eos_hybrid_gamma_0'],
                     logp1,
-                    converted_parameters['eos_polytrope_gamma_1'],
-                    logp2,
-                    converted_parameters['eos_polytrope_gamma_2'],
+                    converted_parameters['eos_hybrid_gamma_1'],
+                    logpt,
+                    converted_parameters['eos_hybrid_energy_jump'],
+                    converted_parameters['eos_hybrid_cs2'],
                     log10_ns_cp1,
                     log10_ns_cp2)
             redshift = luminosity_distance_to_redshift(converted_parameters['luminosity_distance'])
@@ -599,11 +601,12 @@ def convert_to_lal_binary_neutron_star_parameters(parameters):
         elif len(float_eos_params) < len(eos_keys):  # case where some or none are floats (batch of samples)
             for key in float_eos_params.keys():
                 converted_parameters[key] = np.ones(max_len) * converted_parameters[key]
-            pg0 = converted_parameters['eos_polytrope_gamma_0']
-            pg1 = converted_parameters['eos_polytrope_gamma_1']
-            pg2 = converted_parameters['eos_polytrope_gamma_2']
-            scaledratio = converted_parameters['eos_polytrope_scaled_pressure_ratio']
-            scaled_p2 = converted_parameters['eos_polytrope_scaled_pressure_2']
+            pg0 = converted_parameters['eos_hybrid_gamma_0']
+            pg1 = converted_parameters['eos_hybrid_gamma_1']
+            scaledratio = converted_parameters['eos_hybrid_scaled_pressure_ratio']
+            scaled_pt = converted_parameters['eos_hybrid_scaled_pressure_t']
+            deps = converted_parameters['eos_hybrid_energy_jump']
+            cs2 = converted_parameters['eos_hybrid_cs2']
             ns_cp_ratio = converted_parameters['ns_central_pressure_ratio']
             ns_cp_scale = converted_parameters['ns_central_pressure_scale']
             lum_dist = converted_parameters['luminosity_distance']
@@ -615,12 +618,12 @@ def convert_to_lal_binary_neutron_star_parameters(parameters):
             all_redshift = np.empty(0)
             all_mass_1 = np.empty(0)
             all_mass_2 = np.empty(0)
-            for (pg_0, pg_1, pg_2, scaled_ratio, scaled_p_2, ns_r, ns_s, ld) in zip(
-                    pg0, pg1, pg2, scaledratio, scaled_p2, ns_cp_ratio, ns_cp_scale, lum_dist):
-                logp_1, logp_2 = log_pressure_reparameterization_conversion(scaled_ratio, scaled_p_2)
+            for (pg_0, pg_1, scaled_ratio, scaled_p_t, dps, css, ns_r, ns_s, ld) in zip(
+                    pg0, pg1, scaledratio, scaled_pt, deps, cs2, ns_cp_ratio, ns_cp_scale, lum_dist):
+                logp_1, logp_t = log_pressure_reparameterization_conversion(scaled_ratio, scaled_p_t)
                 log10_ns_cp_1, log10_ns_cp_2 = central_pressure_reparameterization_conversion(ns_r, ns_s)
-                m1s, m2s, lam1, lam2, eos_chk = polytrope_central_pressures_to_masses_and_lambdas(
-                    pg_0, logp_1, pg_1, logp_2, pg_2, log10_ns_cp_1, log10_ns_cp_2)
+                m1s, m2s, lam1, lam2, eos_chk = hybrid_central_pressures_to_masses_and_lambdas(
+                    pg_0, logp_1, pg_1, logp_t, dps, css, log10_ns_cp_1, log10_ns_cp_2)
                 z = luminosity_distance_to_redshift(ld)
                 all_mass_1_source = np.append(all_mass_1_source, m1s)
                 all_mass_2_source = np.append(all_mass_2_source, m2s)
