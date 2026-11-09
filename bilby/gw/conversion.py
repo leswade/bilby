@@ -1156,11 +1156,11 @@ def polytrope_params_to_family(
     return family
 
 
-def hybrid_params_to_family( # FIXME: the docstring is from a different function
+def hybrid_params_to_family(
         gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_t_cgs, deps, 
         cs2, fam_flag=2, causality_check=True):
     """
-    Build the 3-piece dynamic polytrope EOS and its neutron star family (TOV sequence
+    Build the 3-piece dynamic hybrid EOS and its neutron star family (TOV sequence
     with all stable branches).
 
     This is the EOS-level half of the central-pressure sampling path: it is done once
@@ -1169,10 +1169,14 @@ def hybrid_params_to_family( # FIXME: the docstring is from a different function
 
     Parameters
     ----------
-    gamma_0, gamma_1, gamma_2: float
+    gamma_0, gamma_1: float
         Piecewise polytrope adiabatic indices.
-    log10_eos_pressure_1_cgs, log10_eos_pressure_2_cgs: float
+    log10_eos_pressure_1_cgs, log10_eos_pressure_t_cgs: float
         EOS dividing pressures in log10 CGS units.
+    deps: float
+        EOS phase transition relative energy density, given by (e(pt after)-e(pt before))/(e(pt before)). 
+    cs2: float
+        Squard speed of sound of the core in units of c^2. 
     fam_flag: int
         Which interpolators the family builds (see lalsim_CreateSimNeutronStarFamily);
         2 (pressure-indexed) is what the central-pressure functions need.
@@ -1313,11 +1317,11 @@ def polytrope_central_pressures_to_masses_and_lambdas(
         log10_ns_central_pressure_1_si, log10_ns_central_pressure_2_si, family)
 
 
-def hybrid_central_pressures_to_masses_and_lambdas( # FIXME: Still has another function's docstring. 
+def hybrid_central_pressures_to_masses_and_lambdas(
         gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_t_cgs, deps, cs2
         log10_ns_central_pressure_1_si, log10_ns_central_pressure_2_si):
     """
-    Compute source-frame masses and tidal deformabilities from polytrope EOS parameters
+    Compute source-frame masses and tidal deformabilities from hybrid EOS parameters
     and NS central pressures (pressure-based sampling pathway).
 
     Uses a pressure-indexed NS family (fam_flag=2) so that each central pressure
@@ -1332,16 +1336,20 @@ def hybrid_central_pressures_to_masses_and_lambdas( # FIXME: Still has another f
     so mass_1 >= mass_2 on a single branch; on a multi-branch EOS the star with
     the larger central pressure can be the lighter one.
 
-    This is polytrope_params_to_family followed by
+    This is hybrid_params_to_family followed by
     masses_and_lambdas_from_central_pressures; code that evaluates many stars on
     one EOS should call those two directly so the family is built once.
         
     Parameters
     ----------
-    gamma_0, gamma_1, gamma_2: float
+    gamma_0, gamma_1: float
         Piecewise polytrope adiabatic indices.
-    log10_eos_pressure_1_cgs, log10_eos_pressure_2_cgs: float
+    log10_eos_pressure_1_cgs, log10_eos_pressure_t_cgs: float
         EOS dividing pressures in log10 CGS units.
+    deps: float
+        EOS phase transition relative energy density, given by (e(pt after)-e(pt before))/(e(pt before)). 
+    cs2: float
+        Squard speed of sound of the core in units of c^2. 
     log10_ns_central_pressure_1_si, log10_ns_central_pressure_2_si: float
         NS central pressures in log10 Pa (SI).
 
