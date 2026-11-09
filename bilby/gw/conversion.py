@@ -1190,12 +1190,12 @@ def hybrid_params_to_family(
     family: lalsim family object, or None
         None when the EOS has no stable branch or fails the causality check.
     """
-    eos = lalsim_SimNeutronStarEOS3PieceDynamicPolytrope(
+    eos = lalsim_SimNeutronStarEOS6ParameterHybrid(
         gamma_0, log10_eos_pressure_1_cgs - 1.,
         gamma_1, log10_eos_pressure_t_cgs - 1.,
         deps, cs2)
     try:
-        family = lalsim_SimNeutronStarEOS6ParameterHybrid(eos, fam_flag=fam_flag)
+        family = lalsim_CreateSimNeutronStarFamily(eos, fam_flag=fam_flag)
     except RuntimeError:  # no stable branch
         return None
     if causality_check and not eos_is_causal_at_maximum_mass_star(eos, family):
