@@ -1040,6 +1040,8 @@ def central_pressure_reparameterization_conversion(ns_central_pressure_ratio, ns
         ratio = (logp2 - minimum) / (logp1 - minimum), in [0, 1]
     ns_central_pressure_scale: float
         scale = logp1 - minimum (must be >= 0)
+    MINIMUM_CENTRAL_LOG10_PRESSURE_SI: float, optional
+        log10 of the pressure (SI pascals) that ns_central_pressure_scale = 0 corresponds to; default 32.79
 
     Returns
     -------
