@@ -1017,10 +1017,11 @@ def lambda_from_mass_and_family(mass_i, family):
 # central-pressure prior starts here (rounded up so that ns_central_pressure_scale = 0 lies inside the first
 # branch). This differs from the joining-pressure floor (33.0 in log10 dyn/cm^2, just above the crust)
 # used by log_pressure_reparameterization_conversion.
-MINIMUM_CENTRAL_LOG10_PRESSURE_SI = 32.79
 
 
-def central_pressure_reparameterization_conversion(ns_central_pressure_ratio, ns_central_pressure_scale):
+
+def central_pressure_reparameterization_conversion(ns_central_pressure_ratio, ns_central_pressure_scale, 
+                                                   MINIMUM_CENTRAL_LOG10_PRESSURE_SI = 32.79):
     '''
     Converts the reparameterization of NS central pressures from
         (ns_central_pressure_ratio, ns_central_pressure_scale) to
