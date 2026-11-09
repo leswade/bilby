@@ -1364,7 +1364,7 @@ def hybrid_central_pressures_to_masses_and_lambdas(
 
     """
     family = hybrid_params_to_family(
-        gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_t_cgs, )
+        gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_t_cgs, deps, cs2)
     if family is None:
         return (np.nan, np.nan, 0.0, 0.0, False)
     return masses_and_lambdas_from_central_pressures(
