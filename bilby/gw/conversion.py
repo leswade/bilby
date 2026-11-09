@@ -1318,7 +1318,7 @@ def polytrope_central_pressures_to_masses_and_lambdas(
 
 
 def hybrid_central_pressures_to_masses_and_lambdas(
-        gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_t_cgs, deps, cs2
+        gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_t_cgs, deps, cs2,
         log10_ns_central_pressure_1_si, log10_ns_central_pressure_2_si):
     """
     Compute source-frame masses and tidal deformabilities from hybrid EOS parameters
