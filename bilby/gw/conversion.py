@@ -1204,9 +1204,9 @@ def hybrid_params_to_family(
     """
     try: 
         eos = lalsim_SimNeutronStarEOS6ParameterHybrid(
-        gamma_0, log10_eos_pressure_1_cgs - 1., 
-        gamma_1, log10_eos_pressure_t_cgs - 1., 
-        deps, cs2)
+                gamma_0, log10_eos_pressure_1_cgs - 1., 
+                gamma_1, log10_eos_pressure_t_cgs - 1., 
+                deps, cs2)
         if not (1.4 < gamma_0 < 4.1): 
             if not (1.4 < gamma_1 < 4.1):
                 if not (-0.1 < deps < 2.1):
