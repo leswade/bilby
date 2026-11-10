@@ -1158,6 +1158,7 @@ def polytrope_params_to_family(
                         print(f"3 piece eos seemed to be fine with objectionable gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_2_cgs - 1., gamma_2 {gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_2_cgs - 1., gamma_2}")
     except RuntimeError: # debug
         print(f"3 piece polytrope failed with gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_2_cgs - 1., gamma_2 are {gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_2_cgs - 1., gamma_2}")
+        return None
     try:
         family = lalsim_CreateSimNeutronStarFamily(eos, fam_flag=fam_flag)
     except RuntimeError:  # no stable branch
