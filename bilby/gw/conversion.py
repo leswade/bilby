@@ -1155,7 +1155,7 @@ def polytrope_params_to_family(
             if not (1.4 < gamma_1 < 4.1):
                 if not (1.4 < gamma_2 < 4.1):
                     if not (log10_eos_pressure_1_cgs < log10_eos_pressure_2_cgs):
-                        print(f" 3 piece eos seemed to be fine with objectionable gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_t_cgs - 1., deps, cs2 {gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_t_cgs - 1., deps, cs2}")
+                        print(f"3 piece eos seemed to be fine with objectionable gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_2_cgs - 1., gamma_2 {gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_2_cgs - 1., gamma_2}")
     except RuntimeError: # debug
         print(f"3 piece polytrope failed with gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_2_cgs - 1., gamma_2 are {gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_2_cgs - 1., gamma_2}")
     try:
@@ -1210,7 +1210,7 @@ def hybrid_params_to_family(
             if not (1.4 < gamma_1 < 4.1):
                 if not (-0.1 < deps < 2.1):
                     if not (0.00 < deps < 1.00):
-                        if not (log10_eos_pressure_1_cgs < log10_eos_pressure_2_cgs):
+                        if not (log10_eos_pressure_1_cgs < log10_eos_pressure_t_cgs):
                             print(f"Hybrid eos seemed to be fine with objectionable gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_t_cgs - 1., deps, cs2 {gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_t_cgs - 1., deps, cs2}")
     except RuntimeError: # debug
         print(f"Hybrid eos failed with gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_t_cgs - 1., deps, cs2 are {gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_t_cgs - 1., deps, cs2}")
