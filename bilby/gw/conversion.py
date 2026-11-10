@@ -1146,10 +1146,18 @@ def polytrope_params_to_family(
     family: lalsim family object, or None
         None when the EOS has no stable branch or fails the causality check.
     """
-    eos = lalsim_SimNeutronStarEOS3PieceDynamicPolytrope(
-        gamma_0, log10_eos_pressure_1_cgs - 1.,
-        gamma_1, log10_eos_pressure_2_cgs - 1.,
-        gamma_2)
+    try: 
+        eos = lalsim_SimNeutronStarEOS3PieceDynamicPolytrope(
+                gamma_0, log10_eos_pressure_1_cgs - 1.,
+                gamma_1, log10_eos_pressure_2_cgs - 1.,
+                gamma_2)
+        if not (1.4 < gamma_0 < 4.1):
+            if not (1.4 < gamma_1 < 4.1):
+                if not (1.4 < gamma_2 < 4.1):
+                    if not (log10_eos_pressure_1_cgs < log10_eos_pressure_2_cgs):
+                        print(f" 3 piece eos seemed to be fine with objectionable gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_t_cgs - 1., deps, cs2 {gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_t_cgs - 1., deps, cs2}")
+    except RuntimeError: # debug
+        print(f"3 piece polytrope failed with gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_2_cgs - 1., gamma_2 are {gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_2_cgs - 1., gamma_2}")
     try:
         family = lalsim_CreateSimNeutronStarFamily(eos, fam_flag=fam_flag)
     except RuntimeError:  # no stable branch
@@ -1193,10 +1201,20 @@ def hybrid_params_to_family(
     family: lalsim family object, or None
         None when the EOS has no stable branch or fails the causality check.
     """
-    eos = lalsim_SimNeutronStarEOS6ParameterHybrid(
-        gamma_0, log10_eos_pressure_1_cgs - 1.,
-        gamma_1, log10_eos_pressure_t_cgs - 1.,
+    try: 
+        eos = lalsim_SimNeutronStarEOS6ParameterHybrid(
+        gamma_0, log10_eos_pressure_1_cgs - 1., 
+        gamma_1, log10_eos_pressure_t_cgs - 1., 
         deps, cs2)
+        if not (1.4 < gamma_0 < 4.1): 
+            if not (1.4 < gamma_1 < 4.1):
+                if not (-0.1 < deps < 2.1):
+                    if not (0.00 < deps < 1.00):
+                        if not (log10_eos_pressure_1_cgs < log10_eos_pressure_2_cgs):
+                            print(f"Hybrid eos seemed to be fine with objectionable gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_t_cgs - 1., deps, cs2 {gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_t_cgs - 1., deps, cs2}")
+    except RuntimeError: # debug
+        print(f"Hybrid eos failed with gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_t_cgs - 1., deps, cs2 are {gamma_0, log10_eos_pressure_1_cgs - 1., gamma_1, log10_eos_pressure_t_cgs - 1., deps, cs2}")
+        return None
     try:
         family = lalsim_CreateSimNeutronStarFamily(eos, fam_flag=fam_flag)
     except RuntimeError:  # no stable branch
@@ -1256,7 +1274,7 @@ def masses_and_lambdas_from_central_pressures(
     eos_check: bool
         Whether both stars exist.
     """
-    rejected = (np.nan, np.nan, 0.0, 0.0, False)
+    rejected = (1.4, 1.4, 0.0, 0.0, False)
     p1_si = 10. ** log10_ns_central_pressure_1_si
     p2_si = 10. ** log10_ns_central_pressure_2_si
     if not (central_pressure_is_on_stable_branch(p1_si, family) and
@@ -1315,7 +1333,7 @@ def polytrope_central_pressures_to_masses_and_lambdas(
     family = polytrope_params_to_family(
         gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_2_cgs, gamma_2)
     if family is None:
-        return (np.nan, np.nan, 0.0, 0.0, False)
+        return (1.4, 1.4, 0.0, 0.0, False)
     return masses_and_lambdas_from_central_pressures(
         log10_ns_central_pressure_1_si, log10_ns_central_pressure_2_si, family)
 
@@ -1369,7 +1387,7 @@ def hybrid_central_pressures_to_masses_and_lambdas(
     family = hybrid_params_to_family(
         gamma_0, log10_eos_pressure_1_cgs, gamma_1, log10_eos_pressure_t_cgs, deps, cs2)
     if family is None:
-        return (np.nan, np.nan, 0.0, 0.0, False)
+        return (1.4, 1.4, 0.0, 0.0, False)
     return masses_and_lambdas_from_central_pressures(
         log10_ns_central_pressure_1_si, log10_ns_central_pressure_2_si, family)
 
